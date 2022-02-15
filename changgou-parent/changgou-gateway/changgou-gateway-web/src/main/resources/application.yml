@@ -1,0 +1,76 @@
+spring:
+  cloud:
+    gateway:
+      globalcors:   #全局配置
+        cors-configurations:  #跨域配置
+          '[/**]': # 匹配所有请求
+            allowedOrigins: "*" #跨域处理 允许所有的域
+            allowedMethods: # 支持的方法
+              - GET
+              - POST
+              - PUT
+              - DELETE
+      routes:
+          #id是唯一标识符
+          - id: changgou_goods_route
+            #用户请求需要路由到该服务
+            #uri: http://localhost:18081   #这种情况对应某一个微服务
+            uri: lb://goods  #这种情况使用负载均衡模式，对应微服务集群，goods是微服务名称
+            #路由断言，路由规则配置
+            predicates:
+            #这里配置的就是所有以cloud.itheima.com：8001（8001是gateway服务端口号）为头的请求，都要被路由到18081去
+#            - Host=127.0.0.1**
+            #这里配置是后面路径以/brand 开头的都路由到18081去
+            - Path=/api/goods/**
+            filters:
+            #删除请求路径的第一个路径，"/"后面的第一个词
+            #比如请求的是 localhost:8001/api/brand  --> localhost:18081/brand
+            #但注意这时候  Path的配置应该是/api/brand**
+            - StripPrefix=1
+
+            #自动加上一个前缀，比如访问的是localhost:8001/abc --> localhost:18081/brand/abc
+            #- PrefixPath=/brand
+            #RequestRateLimiter表示是局部限流过滤器（不能改）
+            - name: RequestRateLimiter #请求数限流 名字不能随便写 ，使用默认的facatory
+              args:
+                key-resolver: "#{@ipKeyResolver}"   #用户身份唯一标识符，ipKeyResolver对应了application类里面定义的bean的name
+                #每秒钟只允许有一个请求
+                redis-rate-limiter.replenishRate: 1
+                #允许并发有4个请求
+                redis-rate-limiter.burstCapacity: 1
+          #id是唯一标识符
+          - id: changgou_user_route
+            uri: http://localhost:18089
+#            uri: lb://user
+            predicates:
+            - Path=/api/user/**,/api/address/**,/api/areas/**,/api/cities/**,/api/provinces/**
+            filters:
+            - StripPrefix=1
+          - id: changgou_order_route
+            uri: lb://order
+            predicates:
+            - Path=/api/cart/**,/api/categoryReport/**,/api/orderConfig/**,/api/order/**,/api/orderItem/**,/api/orderLog/**,/api/preferential/**,/api/returnCause/**,/api/returnOrder/**,/api/returnOrderItem/**
+            filters:
+            - StripPrefix=1
+
+  application:
+    name: gateway-web
+  #Redis配置
+  redis:
+    host: 192.168.131.156
+    port: 6379
+server:
+  port: 8001
+eureka:
+  client:
+    service-url:
+      defaultZone: http://127.0.0.1:7001/eureka
+  instance:
+    prefer-ip-address: true
+management:
+  endpoint:
+    gateway:
+      enabled: true
+    web:
+      exposure:
+        include: true
